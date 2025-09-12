@@ -19,7 +19,6 @@ export class HomePage {
     
         await this.menuAmor.click();
         await this.buttonList.click();
-        await this.page.waitForTimeout(3000);
 
     }
 

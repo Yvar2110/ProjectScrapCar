@@ -45,7 +45,6 @@ export class ProductoPage {
     ]);
     
 
-    await this.page.waitForTimeout(2000);
   }
 
   async getProductDetails(): Promise<ProductDetails> {
@@ -148,7 +147,6 @@ export class ProductoPage {
         try {
           await this.quantityInput.clear();
           await this.quantityInput.fill(quantity.toString());
-          await this.page.waitForTimeout(500);
         } catch {
           console.log('No se pudo configurar la cantidad, usando cantidad por defecto');
         }
