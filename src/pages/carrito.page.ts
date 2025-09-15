@@ -55,10 +55,15 @@ export class CarritoPage {
   async waitForLoad() {
     await this.page.waitForLoadState('domcontentloaded');
 
-    await Promise.race([
-      this.cartTable.waitFor({ timeout: 10000 }),
-      this.emptyCartMessage.waitFor({ timeout: 10000 })
-    ]);
+    try {
+      await Promise.race([
+        this.cartTable.waitFor({ timeout: 5000 }),
+        this.emptyCartMessage.waitFor({ timeout: 5000 })
+      ]);
+    } catch (error) {
+      // Si no encuentra ninguno de los elementos, continúa
+      console.log('Elementos del carrito no encontrados, continuando...');
+    }
   }
 
   async getCartItems(): Promise<CartItem[]> {

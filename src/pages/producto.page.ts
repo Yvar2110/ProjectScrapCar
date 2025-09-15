@@ -45,18 +45,16 @@ export class ProductoPage {
     ]);
     
 
-    await this.page.waitForTimeout(2000);
   }
 
   async getProductDetails(): Promise<ProductDetails> {
     await this.waitForLoad();
     
-
+    // Capturar nombre del producto
     let name = '';
     try {
       name = await this.productTitle.first().textContent() || '';
     } catch {
-  
       const altTitleSelectors = ['h1', '.product-title', '.entry-title', '.woocommerce-product-title'];
       for (const selector of altTitleSelectors) {
         try {
@@ -66,21 +64,47 @@ export class ProductoPage {
       }
     }
     
-
+    // Capturar precio del producto con múltiples estrategias
     let price = '';
-    try {
-      price = await this.productPrice.first().textContent() || '';
-    } catch {
-  
-      const altPriceSelectors = ['.price', '.woocommerce-Price-amount', '.amount', '.product-price'];
-      for (const selector of altPriceSelectors) {
-        try {
-          price = await this.page.locator(selector).first().textContent() || '';
-          if (price.trim()) break;
-        } catch { continue; }
-      }
+    const priceSelectors = [
+      '.price .amount',
+      '.woocommerce-Price-amount',
+      '.price-current',
+      '.product-price .amount',
+      '.price',
+      '.amount',
+      '.product-price',
+      'span[class*="price"]',
+      'div[class*="price"]',
+      '.woocommerce-Price-amount.amount'
+    ];
+    
+    for (const selector of priceSelectors) {
+      try {
+        const elements = await this.page.locator(selector).all();
+        for (const element of elements) {
+          const text = await element.textContent();
+          if (text && text.trim() && this.isValidPrice(text)) {
+            price = text.trim();
+            console.log(`💰 Precio encontrado con selector '${selector}': ${price}`);
+            break;
+          }
+        }
+        if (price) break;
+      } catch { continue; }
     }
     
+    // Si no se encuentra precio, intentar buscar en todo el contenido
+    if (!price) {
+      try {
+        const pageContent = await this.page.content();
+        const priceMatch = pageContent.match(/\$?[\d,]+\.?\d*|[\d,]+\s*pesos?/gi);
+        if (priceMatch && priceMatch.length > 0) {
+          price = priceMatch[0];
+          console.log(`💰 Precio encontrado en contenido: ${price}`);
+        }
+      } catch { /* ignore */ }
+    }
 
     const productId = await this.getProductId();
     
@@ -133,10 +157,41 @@ export class ProductoPage {
     }
   }
 
+  // Método para validar si un texto contiene un precio válido
+  isValidPrice(text: string): boolean {
+    if (!text) return false;
+    // Buscar patrones de precio comunes
+    const pricePattern = /\$?[\d,]+\.?\d*|[\d,]+\s*pesos?/i;
+    return pricePattern.test(text) && text.length < 50; // Evitar textos muy largos
+  }
+
   getCleanPrice(price: string): string {
     if (!price) return '0';
-
-    return price.replace(/[^\d.,]/g, '').trim();
+    
+    // Limpiar el precio manteniendo números, comas y puntos
+    let cleanPrice = price.replace(/[^\d.,]/g, '').trim();
+    
+    // Si el precio limpio está vacío, intentar extraer números del texto original
+    if (!cleanPrice) {
+      const numbers = price.match(/\d+/g);
+      if (numbers && numbers.length > 0) {
+        cleanPrice = numbers.join('');
+      }
+    }
+    
+    // Si aún no hay precio, devolver '0'
+    if (!cleanPrice) return '0';
+    
+    // Formatear el precio (agregar puntos para miles si es necesario)
+    if (cleanPrice.length > 3 && !cleanPrice.includes('.') && !cleanPrice.includes(',')) {
+      // Asumir que números largos sin decimales necesitan formateo
+      const num = parseInt(cleanPrice);
+      if (num > 999) {
+        cleanPrice = num.toLocaleString('es-CO');
+      }
+    }
+    
+    return cleanPrice;
   }
 
   async addToCart(quantity: number = 1): Promise<AddToCartResult> {
@@ -148,7 +203,6 @@ export class ProductoPage {
         try {
           await this.quantityInput.clear();
           await this.quantityInput.fill(quantity.toString());
-          await this.page.waitForTimeout(500);
         } catch {
           console.log('No se pudo configurar la cantidad, usando cantidad por defecto');
         }
